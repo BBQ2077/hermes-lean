@@ -1,0 +1,6 @@
+{
+  "_comment": "EXAMPLE private drop-in. Copy to overrides.d/90-private.json and edit. Layered on top of overrides/compact-overrides.json. Keep this file OUT of version control.",
+  "skill_description_exception_skills": [
+    "hermes-agent"
+  ]
+}
