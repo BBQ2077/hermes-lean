@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import tempfile
 import unittest
@@ -47,10 +48,36 @@ class UiBoundaryTests(unittest.TestCase):
     def test_editor_command_uses_notepad_and_never_shell_association(self):
         with tempfile.TemporaryDirectory() as td:
             good = Path(td) / "config.JSON"
-            good.write_text("{}", encoding="utf-8")
+            good.write_text("{}\n", encoding="utf-8")
             cmd = ui.editor_command(good)
-            self.assertTrue(cmd[0] in ("notepad.exe", "open", "xdg-open"))
-            self.assertEqual(len(cmd), 2)
+            expected = str(good.resolve())
+            if os.name == "nt":
+                self.assertEqual(cmd, ["notepad.exe", expected])
+            elif sys.platform == "darwin":
+                # macOS 用 `open -t` 指定以文字編輯器開啟。
+                self.assertEqual(cmd, ["open", "-t", expected])
+            else:
+                self.assertEqual(cmd, ["xdg-open", expected])
+
+    def test_every_platform_opener_argv_is_pinned(self):
+        """三個平台的分支都要驗證；只驗證執行平台會漏掉其他平台的錯誤。"""
+        with tempfile.TemporaryDirectory() as td:
+            good = Path(td) / "config.json"
+            good.write_text("{}\n", encoding="utf-8")
+            expected = str(good.resolve())
+            cases = [
+                ("nt", "win32", ["notepad.exe", expected]),
+                ("posix", "darwin", ["open", "-t", expected]),
+                ("posix", "linux", ["xdg-open", expected]),
+            ]
+            for os_name, platform, want in cases:
+                with self.subTest(platform=platform):
+                    with mock.patch.object(ui.os, "name", os_name), \
+                         mock.patch.object(ui.sys, "platform", platform):
+                        self.assertEqual(ui.editor_command(good), want)
+            # 任何分支都不得把檔案交給系統 shell 關聯執行。
+            for _, _, argv in cases:
+                self.assertNotIn(argv[0], ("cmd", "cmd.exe", "sh", "bash", "powershell"))
 
     def test_editor_command_rejects_non_json_and_missing(self):
         with tempfile.TemporaryDirectory() as td:
