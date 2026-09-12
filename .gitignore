@@ -1,0 +1,19 @@
+# private / local configs — never publish (may reveal personal interests)
+overrides/
+overrides.d/*.json
+!overrides.d/90-private.example.json
+
+# UI state and local snapshots
+ui_state.json
+_tmp/
+_captured.json
+captured.json
+out.json
+*capture*.json
+*.bak-hermes-lean-*
+*.bak-hermes-compact-*
+__pycache__/
+
+# dev screenshots (verification only)
+_ui_*.png
+_*.png
