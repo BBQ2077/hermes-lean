@@ -1,0 +1,66 @@
+hermes-lean
+===========
+
+MIT License — see LICENSE for the full text.
+
+Copyright (c) 2026 hermes-lean contributors
+
+
+Third-party notice — Hermes Agent (Nous Research)
+-------------------------------------------------
+
+This project is an unofficial companion utility for Hermes Agent
+(https://hermes-agent.nousresearch.com). It is not affiliated with, endorsed by,
+or sponsored by Nous Research.
+
+Hermes Agent is distributed under the MIT License:
+
+    MIT License
+    Copyright (c) 2025 Nous Research
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+
+Which files contain Hermes-derived text
+---------------------------------------
+
+`compact-overrides.example.json`
+
+    The `prompt_strings` section reproduces system-prompt text that is also
+    present verbatim in Hermes Agent's own source
+    (`agent/prompt_builder.py`). Nous Research's MIT notice above applies to
+    that text. The `tool_descriptions` and `parameter_descriptions` sections are
+    independent paraphrases written for this project.
+
+`apply_compact.py` / `compact_ui.py`
+
+    These scripts append a clearly-marked, self-contained block at the end of
+    three Hermes Agent source files:
+
+        <hermes-agent>/model_tools.py
+        <hermes-agent>/agent/prompt_builder.py
+        <hermes-agent>/agent/coding_context.py
+
+    Running the tool therefore combines your local Hermes Agent checkout (MIT,
+    Nous Research) with this project's code. The two licences are compatible —
+    both MIT — and no copyleft obligation is created. Always keep your Hermes
+    Agent checkout's own `LICENSE` file intact.
+
+The user's own `overrides/` and `overrides.d/*.json` files are not part of this
+distribution and are git-ignored.
