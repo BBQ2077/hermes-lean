@@ -20,6 +20,6 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile
-        run: python -m py_compile apply_compact.py compact_ui.py tests/test_security.py tests/test_ui_security.py
+        run: python -m py_compile apply_compact.py compact_ui.py tests/test_security.py tests/test_ui_security.py tests/test_memory_readonly.py tests/test_publish_safety.py
       - name: Unit tests
         run: python -m unittest discover -s tests -v

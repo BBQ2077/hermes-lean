@@ -101,12 +101,28 @@ class ConfigValidationTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             ac.validate_config({"prompt_strings": {"os": "replace module"}}, source="bad")
 
+    def test_steer_marker_global_is_allowed(self):
+        ac.validate_config({"prompt_strings": {"STEER_MARKER_OPEN": "[OUT-OF-BAND USER MESSAGE"}}, source="ok")
+
+    def test_compact_rewrites_schema_is_validated(self):
+        for case in ({"nope": 1}, {"memory_block_compact": "yes"},
+                     {"profile_line": "no placeholder"}, {"host_line_template": 7}):
+            with self.assertRaises(SystemExit):
+                ac.validate_config({"compact_rewrites": case}, source="bad")
+        ac.validate_config({"compact_rewrites": {"profile_line": "p {root}", "memory_block_compact": True}}, source="ok")
+
+    def test_compact_tool_search_schemas_must_be_bool(self):
+        with self.assertRaises(SystemExit):
+            ac.validate_config({"compact_tool_search_schemas": "yes"}, source="bad")
+        ac.validate_config({"compact_tool_search_schemas": True}, source="ok")
+
     def test_non_finite_json_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             bad = Path(td) / "bad.json"
             bad.write_text('{"tool_descriptions":{"x":NaN}}', encoding="utf-8")
             with self.assertRaises(SystemExit):
                 ac.load_configs([bad])
+
     def test_duplicate_json_members_are_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             bad = Path(td) / "bad.json"
@@ -123,13 +139,16 @@ class VerificationContractTests(unittest.TestCase):
     def test_report_counts_must_match_config(self):
         cfg = {"tool_descriptions": {"terminal": "x"}, "prompt_strings": {"TASK_COMPLETION_GUIDANCE": "y"}}
         result = {"tool_ok": 0, "tool_bad": [], "prompt_ok": 1, "prompt_bad": [],
-                  "skills_ok": True, "compute_wrapped": True, "gate_ok": True}
+                  "skills_ok": True, "compute_wrapped": True, "gate_ok": True,
+                  "rewrites_ok": True, "memory_ok": True, "host_ok": True,
+                  "rewrites_ok": True, "memory_ok": True, "host_ok": True}
         self.assertTrue(ac._verification_failures(result, cfg))
 
     def test_configured_name_absent_upstream_is_a_failure(self):
         cfg = {"tool_descriptions": {"__bogus__": "x"}, "prompt_strings": {}}
         result = {"tool_ok": 1, "tool_bad": [], "prompt_ok": 0, "prompt_bad": [],
                   "skills_ok": True, "compute_wrapped": True, "gate_ok": True,
+                  "rewrites_ok": True, "memory_ok": True, "host_ok": True,
                   "unknown_tools": ["__bogus__"], "unknown_parameters": []}
         failures = ac._verification_failures(result, cfg)
         self.assertTrue(any("not present upstream" in f for f in failures))
@@ -138,11 +157,38 @@ class VerificationContractTests(unittest.TestCase):
         cfg = {"tool_descriptions": {"terminal": "x"}, "prompt_strings": {"MEMORY_GUIDANCE": "y"}}
         result = {"tool_ok": 1, "tool_bad": [], "prompt_ok": 1, "prompt_bad": [],
                   "skills_ok": True, "compute_wrapped": True, "gate_ok": True,
+                  "rewrites_ok": True, "memory_ok": True, "host_ok": True,
+                  "skills_readonly_banner_ok": True, "skills_demote_escape_ok": True,
+                  "skills_demote_all_exceptions_ok": True,
                   "unknown_tools": [], "unknown_parameters": []}
         self.assertEqual(ac._verification_failures(result, cfg), [])
 
+    def test_rewrite_not_live_is_a_failure(self):
+        cfg = {"compact_rewrites": {"profile_line": "p {root}", "host_line_template": "Host: {host}"}}
+        ok = {"tool_ok": 0, "tool_bad": [], "prompt_ok": 0, "prompt_bad": [], "skills_ok": True,
+              "compute_wrapped": True, "gate_ok": True, "rewrites_ok": True, "memory_ok": True,
+              "host_ok": True, "unknown_tools": [], "unknown_parameters": [],
+              "skills_readonly_banner_ok": True, "skills_demote_escape_ok": True,
+              "skills_demote_all_exceptions_ok": True}
+        self.assertEqual(ac._verification_failures(ok, cfg), [])
+        dead = dict(ok, rewrites_ok=False, host_ok=False)
+        self.assertEqual(len(ac._verification_failures(dead, cfg)), 2)
+
 
 class CaptureTests(unittest.TestCase):
+    def test_bridge_compaction_must_be_live_when_configured(self):
+        cfg = {"compact_tool_search_schemas": True, "tool_descriptions": {"terminal": "x"}}
+        r = {k: True for k in ("skills_ok", "compute_wrapped", "gate_ok", "rewrites_ok",
+                               "memory_ok", "host_ok", "bridge_compact_ok")}
+        r.update({"tool_ok": 1, "tool_bad": [], "prompt_ok": 0, "prompt_bad": [],
+                  "skills_readonly_banner_ok": True, "skills_demote_escape_ok": True,
+                  "skills_demote_all_exceptions_ok": True,
+                  "unknown_tools": [], "unknown_parameters": []})
+        self.assertEqual(ac._verification_failures(r, cfg), [])
+        r.pop("bridge_compact_ok")
+        self.assertEqual(len(ac._verification_failures(r, cfg)), 1)
+        self.assertEqual(ac._verification_failures(r, {"tool_descriptions": {"terminal": "x"}}), [])
+
     def test_capture_reads_effective_lazy_tool_definitions(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -163,6 +209,29 @@ class CaptureTests(unittest.TestCase):
             data = json.loads(out.read_text(encoding="utf-8"))
             self.assertEqual(data["tool_descriptions"]["terminal"], "Run safely")
             self.assertEqual(data["parameter_descriptions"]["terminal"]["command"], "Command text")
+
+    def test_verify_stages_big_configs_instead_of_the_command_line(self):
+        token = os.urandom(8).hex()
+        cfg = {"tool_descriptions": {"terminal": token + "y" * 60000}}
+        seen = {}
+
+        class Done:
+            returncode = 0
+            stdout = "HC_VERIFY {}\n"
+            stderr = ""
+
+        def fake_run(argv, **kw):
+            seen["argv"] = argv
+            seen["staged"] = [p for p in Path(tempfile.gettempdir()).glob("hc-verify-*/cfg.json")
+                              if token in p.read_text(encoding="utf-8")]
+            return Done()
+
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(ac, "venv_python", return_value=Path(sys.executable)):
+                with mock.patch.object(ac.subprocess, "run", side_effect=fake_run):
+                    self.assertEqual(ac.verify(Path(td), cfg), {})
+        self.assertTrue(seen["staged"])
+        self.assertLess(max(len(a) for a in seen["argv"]), 30000)
 
 
 class ApplyTransactionTests(unittest.TestCase):
